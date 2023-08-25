@@ -51,5 +51,7 @@ Temporary Items
 .ionide
 
 config.h
+request.json
+test.js
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,macos
