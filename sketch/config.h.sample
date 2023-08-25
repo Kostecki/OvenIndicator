@@ -1,0 +1,9 @@
+// WiFi
+const char *wifi_ssid = "";
+const char *wifi_password = "";
+
+// Project
+const int projectId;
+
+// Config URL
+const String configURL = "";
