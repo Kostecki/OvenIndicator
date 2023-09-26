@@ -27,13 +27,14 @@ DynamicJsonDocument configDoc(4096);
 DynamicJsonDocument smartThingsDoc(24576);
 
 // Configs
-const char *smartthings_api_url;
-const char *bearer_token;
+const char *smartthingsApiUrl;
+const char *bearerToken;
+int brightness = 255;
+long onInterval = 0;
+long offInterval = 0;
 
 unsigned long runtime = 0;
-const long onInterval = 10000;   // 10 seconds
-const long OffInternval = 30000; // 30 seconds
-long checkInterval = OffInternval;
+long checkInterval = offInterval;
 
 int mode = 0;
 int usableLeds[] = {86, 43};
@@ -90,14 +91,40 @@ void setupConfig()
         {
           if (enabled)
           {
-            smartthings_api_url = elem["value"];
+            smartthingsApiUrl = elem["value"];
+            DEBUG_SERIAL.println("smartthings-api-url: " + String(smartthingsApiUrl));
           }
         }
         else if (strcmp(key, "bearer-token") == 0)
         {
           if (enabled)
           {
-            bearer_token = elem["value"];
+            bearerToken = elem["value"];
+            DEBUG_SERIAL.println("bearer-token: " + String(bearerToken));
+          }
+        }
+        else if (strcmp(key, "on-interval") == 0)
+        {
+          if (enabled)
+          {
+            onInterval = elem["value"];
+            DEBUG_SERIAL.println("on-interval: " + String(onInterval));
+          }
+        }
+        else if (strcmp(key, "off-interval") == 0)
+        {
+          if (enabled)
+          {
+            offInterval = elem["value"];
+            DEBUG_SERIAL.println("off-interval: " + String(offInterval));
+          }
+        }
+        else if (strcmp(key, "brightness") == 0)
+        {
+          if (enabled)
+          {
+            brightness = elem["value"];
+            DEBUG_SERIAL.println("brightness: " + String(brightness));
           }
         }
       }
@@ -112,7 +139,7 @@ void setupConfig()
 void setupFastLED()
 {
   FastLED.addLeds<WS2812B, DATA_PIN>(hardwareLeds, NUM_LEDS);
-  FastLED.setBrightness(255);
+  FastLED.setBrightness(brightness);
   FastLED.clear();
   FastLED.show();
 }
@@ -200,9 +227,9 @@ void checkStatus()
   DEBUG_SERIAL.println();
   DEBUG_SERIAL.println("Fetching oven status from Samartthings..");
 
-  if (http.begin(clientSecure, smartthings_api_url))
+  if (http.begin(clientSecure, smartthingsApiUrl))
   {
-    http.addHeader("Authorization", bearer_token);
+    http.addHeader("Authorization", bearerToken);
     int httpCode = http.GET();
     DEBUG_SERIAL.println("Response code: " + String(httpCode));
 
@@ -235,7 +262,7 @@ void checkStatus()
       // // Top/Main Oven
       // const char *mainState = "running";
       // const int mainTempTarget = 250;
-      // const int mainTempCurrent = 249;
+      // const int mainTempCurrent = 150;
       // const int mainTimerStatus = 0;
 
       // // Bottom Oven
@@ -264,7 +291,7 @@ void checkStatus()
       else
       {
         DEBUG_SERIAL.println("Ovn er slukket");
-        checkInterval = OffInternval;
+        checkInterval = offInterval;
         FastLED.clear();
         FastLED.show();
       }
