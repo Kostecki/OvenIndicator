@@ -318,7 +318,7 @@ void fetchOvenNumbers()
       // Top/Main Oven
       JsonObject main = smartThingsDoc["components"]["main"];
       const char *mainState = main["samsungce.ovenOperatingState"]["operatingState"]["value"];
-      const int mTempTarget = main["ovenSetpoint"]["ovenSetpoinxt"]["value"];
+      const int mTempTarget = main["ovenSetpoint"]["ovenSetpoint"]["value"];
       const int mTempCurrent = main["temperatureMeasurement"]["temperature"]["value"];
       const int mTimerStatus = main["samsungce.ovenOperatingState"]["progress"]["value"];
 
@@ -342,6 +342,7 @@ void fetchOvenNumbers()
 
       if (strcmp(mainState, "running") == 0 || strcmp(bottomState, "running") == 0)
       {
+        DEBUG_SERIAL.println("Oven is running");
         checkInterval = onInterval;
 
         if (mainTempTarget && bottomTempTarget)
@@ -361,7 +362,7 @@ void fetchOvenNumbers()
       }
       else
       {
-        DEBUG_SERIAL.println("Ovn er slukket");
+        DEBUG_SERIAL.println("Oven is off");
 
         checkInterval = offInterval;
         mode = -1; // Off
