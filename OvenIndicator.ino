@@ -5,6 +5,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <ArduinoOTA.h>
 
 #include "config.h"
 #include "breathing.h"
@@ -50,6 +51,7 @@ int bottomTimerStatus;
 
 void setupWiFi()
 {
+  WiFi.setHostname(hostname);
   WiFi.mode(WIFI_STA);
   WiFi.begin(wifi_ssid, wifi_password);
   DEBUG_SERIAL.println();
@@ -68,6 +70,17 @@ void setupWiFi()
   DEBUG_SERIAL.println(WiFi.localIP());
 
   clientSecure.setInsecure();
+}
+void setupOTA()
+{
+  // Initialize OTA
+  ArduinoOTA.begin();
+  ArduinoOTA.setPassword(ota_password);
+
+  // Set up OTA event handlers
+  ArduinoOTA.onStart(handleOTAStart);
+  ArduinoOTA.onProgress(handleOTAProgress);
+  ArduinoOTA.onEnd(handleOTAEnd);
 }
 void setupConfig()
 {
@@ -159,6 +172,20 @@ void setupFastLED()
   FastLED.setBrightness(brightness);
   FastLED.clear();
   FastLED.show();
+}
+
+void handleOTAStart()
+{
+  DEBUG_SERIAL.println("OTA update starting..");
+}
+void handleOTAProgress(unsigned int progress, unsigned int total)
+{
+  DEBUG_SERIAL.printf("Progress: %u%%\r", (progress / (total / 100)));
+}
+void handleOTAEnd()
+{
+  DEBUG_SERIAL.println("\nOTA update complete!");
+  ESP.restart();
 }
 
 void doBreathing(int index, uint8_t hue, uint8_t sat, uint8_t val)
@@ -359,6 +386,7 @@ void setup()
 #endif
 
   setupWiFi();
+  setupOTA();
   setupConfig();
   setupFastLED();
   fetchOvenNumbers();
@@ -366,6 +394,8 @@ void setup()
 
 void loop()
 {
+  ArduinoOTA.handle();
+
   unsigned long currentMillis = millis();
 
   if (currentMillis - runtime >= checkInterval)
