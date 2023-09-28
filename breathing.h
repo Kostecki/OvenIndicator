@@ -1,4 +1,7 @@
-// Breathing (https://github.com/marmilicious/FastLED_examples/blob/master/breath_effect_v2.ino)
+/*
+  Breathing effect
+  https://github.com/marmilicious/FastLED_examples/blob/master/breath_effect_v2.ino
+*/
 static float pulseSpeed = 0.50; // Larger value gives faster pulse.
 
 uint8_t hueA = 255;     // Start hue at valueMin.
