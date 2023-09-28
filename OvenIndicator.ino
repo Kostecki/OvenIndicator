@@ -387,5 +387,13 @@ void loop()
     updateLEDs(mainTempProgress, bottomTempProgress, mainTimerProgress, bottomTimerProgress);
   }
 
+  if (Serial.available())
+  {
+    String cmd = Serial.readString();
+    Serial.println(cmd);
+    if (cmd.equals("reset\n"))
+    {
+      ESP.restart();
+    }
   }
 }
