@@ -7,15 +7,16 @@
 #include <ArduinoJson.h>
 
 #include "config.h"
+#include "breathing.h"
 
 // Enable/Disable debug-mode
-#define DEBUG true
+#define DEBUG false
 #define DEBUG_SERIAL \
   if (DEBUG)         \
   Serial
 
 #define DATA_PIN 16
-#define NUM_LEDS 86
+#define NUM_LEDS 84
 
 WiFiClient client;
 WiFiClientSecure clientSecure;
@@ -29,15 +30,23 @@ DynamicJsonDocument smartThingsDoc(24576);
 // Configs
 const char *smartthingsApiUrl;
 const char *bearerToken;
-int brightness = 255;
+int brightness = 32;
 long onInterval = 0;
 long offInterval = 0;
 
 unsigned long runtime = 0;
 long checkInterval = offInterval;
 
+int usableLeds[] = {84, 42};
+
+// Oven State
 int mode = 0;
-int usableLeds[] = {86, 43};
+int mainTempTarget;
+int mainTempCurrent;
+int mainTimerStatus;
+int bottomTempTarget;
+int bottomTempCurrent;
+int bottomTimerStatus;
 
 void setupWiFi()
 {
@@ -127,6 +136,14 @@ void setupConfig()
             DEBUG_SERIAL.println("brightness: " + String(brightness));
           }
         }
+        else if (strcmp(key, "pulse-speed") == 0)
+        {
+          if (enabled)
+          {
+            pulseSpeed = elem["value"];
+            DEBUG_SERIAL.println("pulse speed: " + String(pulseSpeed));
+          }
+        }
       }
     }
     http.end();
@@ -144,24 +161,50 @@ void setupFastLED()
   FastLED.show();
 }
 
+void doBreathing(int index, uint8_t hue, uint8_t sat, uint8_t val)
+{
+  hardwareLeds[index] = CHSV(hue, sat, val);
+
+  // You can experiment with commenting out these dim8_video lines
+  // to get a different sort of look.
+  hardwareLeds[index].r = dim8_video(hardwareLeds[index].r);
+  hardwareLeds[index].g = dim8_video(hardwareLeds[index].g);
+  hardwareLeds[index].b = dim8_video(hardwareLeds[index].b);
+}
+
 void setLEDData(int progress, bool reversed = false)
 {
+  // Total number of leds in use
+  int leds = usableLeds[mode];
+
+  float dV = ((exp(sin(pulseSpeed * millis() / 2000.0 * PI)) - 0.36787944) * delta);
+  val = valueMin + dV;
+  hue = map(val, valueMin, valueMax, hueA, hueB); // Map hue based on current val
+  sat = map(val, valueMin, valueMax, satA, satB); // Map sat based on current val
+
   if (reversed)
   {
     for (int i = NUM_LEDS; i >= NUM_LEDS - progress; i--)
     {
-      hardwareLeds[i] = CRGB::White;
+      doBreathing(i, hue, sat, val);
     }
+
+    // Fixed on for last led
+    hardwareLeds[leds] = CRGB::White;
+    FastLED.show();
   }
   else
   {
     for (int i = 0; i < progress; i++)
     {
-      hardwareLeds[i] = CRGB::White;
+      doBreathing(i, hue, sat, val);
     }
+
+    // Fixed on for last led
+    hardwareLeds[leds - 1] = CRGB::White;
+    FastLED.show();
   }
 }
-
 void updateLEDs(int mainTemp, int bottomTemp, int mainTimer, int bottomTimer)
 {
   DEBUG_SERIAL.println("Update leds..");
@@ -222,10 +265,10 @@ void updateLEDs(int mainTemp, int bottomTemp, int mainTimer, int bottomTimer)
   FastLED.show();
 }
 
-void checkStatus()
+void fetchOvenNumbers()
 {
   DEBUG_SERIAL.println();
-  DEBUG_SERIAL.println("Fetching oven status from Samartthings..");
+  DEBUG_SERIAL.println("Fetching oven numbers from SmartThings..");
 
   if (http.begin(clientSecure, smartthingsApiUrl))
   {
@@ -248,28 +291,27 @@ void checkStatus()
       // Top/Main Oven
       JsonObject main = smartThingsDoc["components"]["main"];
       const char *mainState = main["samsungce.ovenOperatingState"]["operatingState"]["value"];
-      const int mainTempTarget = main["ovenSetpoint"]["ovenSetpoint"]["value"];
-      const int mainTempCurrent = main["temperatureMeasurement"]["temperature"]["value"];
-      const int mainTimerStatus = main["samsungce.ovenOperatingState"]["progress"]["value"];
+      const int mTempTarget = main["ovenSetpoint"]["ovenSetpoinxt"]["value"];
+      const int mTempCurrent = main["temperatureMeasurement"]["temperature"]["value"];
+      const int mTimerStatus = main["samsungce.ovenOperatingState"]["progress"]["value"];
 
       // Bottom Oven
       JsonObject bottom = smartThingsDoc["components"]["cavity-01"];
       const char *bottomState = bottom["samsungce.ovenOperatingState"]["operatingState"]["value"];
-      const int bottomTempTarget = bottom["ovenSetpoint"]["ovenSetpoint"]["value"];
-      const int bottomTempCurrent = bottom["temperatureMeasurement"]["temperature"]["value"];
-      const int bottomTimerStatus = bottom["samsungce.ovenOperatingState"]["progress"]["value"];
+      const int bTempTarget = bottom["ovenSetpoint"]["ovenSetpoint"]["value"];
+      const int bTempCurrent = bottom["temperatureMeasurement"]["temperature"]["value"];
+      const int bTimerStatus = bottom["samsungce.ovenOperatingState"]["progress"]["value"];
 
-      // // Top/Main Oven
+      // // Test Data
       // const char *mainState = "running";
-      // const int mainTempTarget = 250;
-      // const int mainTempCurrent = 150;
-      // const int mainTimerStatus = 0;
+      // const int mTempTarget = 250;
+      // const int mTempCurrent = 200;
+      // const int mTimerStatus = 0;
 
-      // // Bottom Oven
       // const char *bottomState = "running";
-      // const int bottomTempTarget = 250;
-      // const int bottomTempCurrent = 250;
-      // const int bottomTimerStatus = 50;
+      // const int bTempTarget = 250;
+      // const int bTempCurrent = 200;
+      // const int bTimerStatus = 0;
 
       if (strcmp(mainState, "running") == 0 || strcmp(bottomState, "running") == 0)
       {
@@ -278,20 +320,25 @@ void checkStatus()
         if (mainTempTarget && bottomTempTarget)
         {
           mode = 1;
+          FastLED.clear();
+          FastLED.show();
         }
 
-        int leds = usableLeds[mode];
-        int mainTempProgress = map(mainTempCurrent, 0, mainTempTarget, 0, leds);
-        int bottomTempProgress = map(bottomTempCurrent, 0, bottomTempTarget, 0, leds);
-        int mainTimerProgress = map(mainTimerStatus, 0, 100, 0, leds);
-        int bottomTimerProgress = map(bottomTimerStatus, 0, 100, 0, leds);
+        mainTempTarget = mTempTarget;
+        mainTempCurrent = mTempCurrent;
+        mainTimerStatus = mTimerStatus;
 
-        updateLEDs(mainTempProgress, bottomTempProgress, mainTimerProgress, bottomTimerProgress);
+        bottomTempTarget = bTempTarget;
+        bottomTempCurrent = bTempCurrent;
+        bottomTimerStatus = bTimerStatus;
       }
       else
       {
         DEBUG_SERIAL.println("Ovn er slukket");
+
         checkInterval = offInterval;
+        mode = -1; // Off
+
         FastLED.clear();
         FastLED.show();
       }
@@ -314,7 +361,7 @@ void setup()
   setupWiFi();
   setupConfig();
   setupFastLED();
-  checkStatus();
+  fetchOvenNumbers();
 }
 
 void loop()
@@ -324,6 +371,21 @@ void loop()
   if (currentMillis - runtime >= checkInterval)
   {
     runtime = currentMillis;
-    checkStatus();
+    fetchOvenNumbers();
+  }
+  else if (mode > -1) // Not Off
+  {
+    DEBUG_SERIAL.println();
+    DEBUG_SERIAL.println("Generating LED state..");
+
+    int leds = usableLeds[mode];
+    int mainTempProgress = map(mainTempCurrent + 1, 0, mainTempTarget, 0, leds);
+    int bottomTempProgress = map(bottomTempCurrent + 1, 0, bottomTempTarget, 0, leds);
+    int mainTimerProgress = map(mainTimerStatus, 0, 100, 0, leds);
+    int bottomTimerProgress = map(bottomTimerStatus, 0, 100, 0, leds);
+
+    updateLEDs(mainTempProgress, bottomTempProgress, mainTimerProgress, bottomTimerProgress);
+  }
+
   }
 }
