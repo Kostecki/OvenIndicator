@@ -340,10 +340,14 @@ void fetchOvenNumbers()
       // const int bTempCurrent = 200;
       // const int bTimerStatus = 0;
 
-      if (strcmp(mainState, "running") == 0 || strcmp(bottomState, "running") == 0)
+      const bool topActive = strcmp(mainState, "running") == 0 && mTempCurrent < mTempTarget - 1;
+      const bool bottomActive = strcmp(mainState, "running") == 0 && bTempCurrent < bTempTarget - 1;
+
+      if (topActive || bottomActive)
       {
         DEBUG_SERIAL.println("Oven is running");
         checkInterval = onInterval;
+        mode = 0;
 
         if (mainTempTarget && bottomTempTarget)
         {
@@ -401,6 +405,8 @@ void loop()
 
   if (currentMillis - runtime >= checkInterval)
   {
+    DEBUG_SERIAL.println();
+    DEBUG_SERIAL.println("Checking runtime..");
     runtime = currentMillis;
     fetchOvenNumbers();
   }
